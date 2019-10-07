@@ -42,17 +42,17 @@ T = 24; # Number of time periods
 G = 10; # Number of generators
 
 using JuMP
-using CPLEX
+using CPLEX, Juniper, Ipopt
 
 ## Model and solver decleration
 #
 
-# optimizer = Juniper.Optimizer
-# params = Dict{Symbol,Any}()
-# params[:nl_solver] = with_optimizer(Ipopt.Optimizer, print_level=0)
+optimizer = Juniper.Optimizer
+params = Dict{Symbol,Any}()
+params[:nl_solver] = with_optimizer(Ipopt.Optimizer, print_level=0)
 
-optimizer = CPLEX.Optimizer
-uc = Model(with_optimizer(optimizer))
+# optimizer = CPLEX.Optimizer
+uc = Model(with_optimizer(optimizer, params))
 
 ## Problem variables
 #
@@ -63,8 +63,8 @@ uc = Model(with_optimizer(optimizer))
 
 ## Problem constraints
 #
-@constraint(uc, Power_Balance_Constraint[t=1:T],
-                sum(P[:,t]) == D[t] )
+@NLconstraint(uc, Power_Balance_Constraint[t=1:T],
+                sum(P[g,t]*u[g,t] for g=1:G ) == D[t] )
 
 
 @constraint(uc, GenerationLimitsMax_Constraint[t=1:T,g=1:G],
