@@ -37,6 +37,9 @@ StartUpCost = [4500,5000,550,560,900,170,260,30,30,30]; # ( $/h )
 ShutDwnCost = zeros(10); # ( $/h )
 
 
+# Reserve
+rt = 0.1
+
 
 T = 24; # Number of time periods
 G = 10; # Number of generators
@@ -54,9 +57,9 @@ uc = Model(with_optimizer(optimizer))
 ## Problem variables
 #
 @variable(uc, P[1:G,1:T]) # Production amount of generator g ∈ G in period t ∈ T
-@variable(uc, u[1:G,1:T], Bin) # Status of generator g ∈ G in period t ∈ T -- 1 if generator g is ON in period t; 0 otherwise
-@variable(uc, y[1:G,1:T], Bin) # Start up decision of generator g ∈ G in period t ∈ T  -- 1 if u[g,(t−1)] = 0 and u[g,t] = 1; 0 otherwise
-@variable(uc, z[1:G,1:T], Bin) # Shut down decision of generator g ∈ G in period t ∈ T -- 1 if u[g,(t−1)] = 1 and uit = 0; 0 otherwise
+@variable(uc, U[1:G,1:T], Bin) # Status of generator g ∈ G in period t ∈ T -- 1 if generator g is ON in period t; 0 otherwise
+@variable(uc, Y[1:G,1:T], Bin) # Start up decision of generator g ∈ G in period t ∈ T  -- 1 if U[g,(t−1)] = 0 and U[g,t] = 1; 0 otherwise
+@variable(uc, Z[1:G,1:T], Bin) # Shut down decision of generator g ∈ G in period t ∈ T -- 1 if U[g,(t−1)] = 1 and uit = 0; 0 otherwise
 
 ## Problem constraints
 #
@@ -64,38 +67,42 @@ uc = Model(with_optimizer(optimizer))
                 sum(P[g,t] for g=1:G ) == D[t] )
 
 
+@constraint(uc, Reserve_Constraint[t=1:G],
+                sum(Pmax[g]*U[g,t] for g=1:G) >= (1+rt)*D[t])
+
+
 @constraint(uc, GenerationLimitsMax_Constraint[t=1:T,g=1:G],
-                P[g,t] <= Pmax[g]*u[g,t] )
+                P[g,t] <= Pmax[g]*U[g,t] )
 
 
 @constraint(uc, GenerationLimitsMin_Constraint[t=1:T,g=1:G],
-                Pmin[g]*u[g,t] <= P[g,t] )
+                Pmin[g]*U[g,t] <= P[g,t] )
 
 
 @constraint(uc, MinUpTime_Constraint[g=1:G, t=2:T, tau=t+1:min(t+MinUpTime[g],T)],
-                u[g,t] - u[g,t-1] <= u[g,tau])
+                U[g,t] - U[g,t-1] <= U[g,tau])
 
 @constraint(uc, MinDwnTime_Constraint[g=1:G, t=2:T, tau=t+1:min(t+MinDwnTime[g],T)],
-                u[g,t-1] - u[g,t] <= 1 - u[g,tau])
+                U[g,t-1] - U[g,t] <= 1 - U[g,tau])
 
 @constraint(uc, StartUp_Constraint[g=1:G, t=2:T],
-                u[g,t] - u[g,t-1] <= y[g,t])
+                U[g,t] - U[g,t-1] <= Y[g,t])
 
 @constraint(uc, ShutDwn_Constraint[g=1:G, t=2:T],
-                u[g,t-1] - u[g,t] <= z[g,t])
+                U[g,t-1] - U[g,t] <= Z[g,t])
 
 @constraint(uc, RampStartUp_Constraint[g=1:G, t=2:T],
-                P[g,t] - P[g,t-1] <= StartUpRate[g]*y[g,t] + RampUpRate[g]*u[g,t-1])
+                P[g,t] - P[g,t-1] <= StartUpRate[g]*Y[g,t] + RampUpRate[g]*U[g,t-1])
 
 @constraint(uc, RampShutDwn_Constraint[g=1:G, t=2:T],
-                P[g,t-1] - P[g,t] <= ShutDwnRate[g]*z[g,t] + RampDwnRate[g]*u[g,t])
+                P[g,t-1] - P[g,t] <= ShutDwnRate[g]*Z[g,t] + RampDwnRate[g]*U[g,t])
 
 
 
 ## Objective Function
 #
-@objective(uc, Min, sum(a[g]*u[g,t] + b[g]*P[g,t] + c[g]*P[g,t]*P[g,t]
-                    + StartUpCost[g]*y[g,t] + ShutDwnCost[g]*z[g,t] for g=1:G, t=1:T ))
+@objective(uc, Min, sum(a[g]*U[g,t] + b[g]*P[g,t] + c[g]*P[g,t]*P[g,t]
+                    + StartUpCost[g]*Y[g,t] + ShutDwnCost[g]*Z[g,t] for g=1:G, t=1:T ))
 
 
 optimize!(uc)

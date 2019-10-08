@@ -36,7 +36,8 @@ MinDwnTime = [8,8,5,5,6,3,3,1,1,1]; # (h)
 StartUpCost = [4500,5000,550,560,900,170,260,30,30,30]; # ( $/h )
 ShutDwnCost = zeros(10); # ( $/h )
 
-
+# Reserve
+rt = 0.1
 
 T = 24; # Number of time periods
 G = 10; # Number of generators
@@ -68,6 +69,10 @@ uc = Model(with_optimizer(optimizer))
                 sum(P[g,t] for g=1:G) == D[t] )
 
 
+@constraint(uc, Reserve_Constraint[t=1:G],
+                sum(Pmax[g]*U[g,t] for g=1:G) >= (1+rt)*D[t])
+
+
 @constraint(uc, Max_GenerationLimits_Constraint[t=1:T,g=1:G],
                 P[g,t] <= Pmax[g]*U[g,t] )
 
@@ -91,14 +96,6 @@ uc = Model(with_optimizer(optimizer))
 @constraint(uc, RampShutDwn_Constraint[g=1:G, t=2:T],
                 P[g,t-1] - P[g,t] <= ShutDwnRate[g]*W[g,t] + RampDwnRate[g]*U[g,t])
 
-#=
-@constraint(uc, MinUpTime_Constraint[g=1:G, t=2:T, tau=t+1:min(t+MinUpTime[g],T)],
-                U[g,t] - U[g,t-1] <= U[g,tau])
-
-
-@constraint(uc, MinDwnTime_Constraint[g=1:G, t=2:T, tau=t+1:min(t+MinDwnTime[g],T)],
-                U[g,t-1] - U[g,t] <= 1 - U[g,tau])
-=#
 
 # Rajan and Takriti's MinUpTime and MinDwnTime constraints
 @constraint(uc, MinUpTime_Constraint[g=1:G, t=MinUpTime[g]:T],
@@ -120,11 +117,11 @@ uc = Model(with_optimizer(optimizer))
 @constraint(uc, W_Limits[g=1:G, t=1:T],
                 0 <= W[g,t] <= 1  )
 
+
 ## Objective Function
 #
 @objective(uc, Min, sum(a[g]*U[g,t] + b[g]*P[g,t] + c[g]*P[g,t]*P[g,t]
                     + StartUpCost[g]*V[g,t] + ShutDwnCost[g]*W[g,t] for g=1:G, t=1:T ))
-
 
 
 optimize!(uc)
