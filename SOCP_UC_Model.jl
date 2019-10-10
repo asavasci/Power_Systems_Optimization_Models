@@ -1,3 +1,11 @@
+#=
+Reference Paper:
+X. Yuan, H. Tian, S. Zhang, B. Ji, and Y. Hou,
+“Second-order cone programming for solving unit commitment strategy
+of thermal generators,” Energy Conversion and Management,
+vol. 76, pp. 20–25, Dec. 2013.
+=#
+
 clearconsole()
 
 ## D_t : Net load in period t ∈ T, ( MW )
@@ -43,16 +51,12 @@ T = 24; # Number of time periods
 G = 10; # Number of generators
 
 using JuMP
-using CPLEX
+using MosekTools
 
 ## Model and solver decleration
 #
 
-# optimizer = Juniper.Optimizer
-# params = Dict{Symbol,Any}()
-# params[:nl_solver] = with_optimizer(Ipopt.Optimizer, print_level=0)
-
-optimizer = CPLEX.Optimizer
+optimizer = Mosek.Optimizer
 uc = Model(with_optimizer(optimizer))
 
 ## Problem variables
@@ -61,7 +65,7 @@ uc = Model(with_optimizer(optimizer))
 @variable(uc, U[1:G,1:T], Bin) # Status of generator g ∈ G in period t ∈ T -- 1 if generator g is ON in period t; 0 otherwise
 @variable(uc, V[1:G,1:T]) # Start up decision of generator g ∈ G in period t ∈ T  -- 1 if U[g,(t−1)] = 0 and U[g,t] = 1; 0 otherwise --> U[g,t] - U[g,(t-1)] = 1
 @variable(uc, W[1:G,1:T]) # Shut down decision of generator g ∈ G in period t ∈ T -- 1 if U[g,(t−1)] = 1 and uit = 0; 0 otherwise
-
+@variable(uc, Gamma[1:G,1:T] >= 0)
 
 ## Problem constraints
 #
@@ -118,9 +122,12 @@ uc = Model(with_optimizer(optimizer))
                 0 <= W[g,t] <= 1  )
 
 
+@constraint(uc, Conic[g=1:G, t=1:T], [(Gamma[g,t] + U[g,t]), 2*P[g,t], (Gamma[g,t] - U[g,t])] in SecondOrderCone() )
+
+
 ## Objective Function
 #
-@objective(uc, Min, sum(a[g]*U[g,t] + b[g]*P[g,t] + c[g]*P[g,t]*P[g,t]
+@objective(uc, Min, sum(a[g]*U[g,t] + b[g]*P[g,t] + c[g]*Gamma[g,t]
                     + StartUpCost[g]*V[g,t] + ShutDwnCost[g]*W[g,t] for g=1:G, t=1:T ))
 
 
